@@ -160,7 +160,6 @@ jobs:
         # 〔中文注释〕: 定义需要构建的 Windows CPU 架构，一般 amd64 就够了
         platform:
           - amd64
-          - 386
     # 〔中文注释〕: 指定使用 Windows 最新版的虚拟环境
     runs-on: windows-latest
     steps:
