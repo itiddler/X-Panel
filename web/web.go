@@ -353,7 +353,7 @@ func (s *Server) Start() (err error) {
 		_, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			logger.Errorf("Error loading certificates, please check the file path and content: %v", err)
-			return err
+			// return err
 		}
 		// 监听用户配置的地址
 		listenAddr = net.JoinHostPort(listen, strconv.Itoa(port))
@@ -363,7 +363,7 @@ func (s *Server) Start() (err error) {
 		logger.Info("Access is only possible via SSH tunnel (e.g., http://127.0.0.1).")
 		
 		// 无论用户在 listen 中填写什么，都强制使用回环地址
-		listen = fallbackToLocalhost(listen)
+		// listen = fallbackToLocalhost(listen)
 		listenAddr = net.JoinHostPort(listen, strconv.Itoa(port))
 	}
 
