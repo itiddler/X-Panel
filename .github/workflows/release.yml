@@ -180,8 +180,8 @@ jobs:
           # 〔中文注释〕: 设置环境变量，GOOS=windows 指定编译目标为 Windows
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.platform }}"
-          # 〔中文注释〕: CGO 在 Windows 下通常不需要，设置为 0
-          $env:CGO_ENABLED = "0"
+          # 〔中文注释〕: CGO，设置为 1, sqlite 需要
+          $env:CGO_ENABLED = "1"
 
           # 〔中文注释〕: 执行 Go 编译命令。-o 指定输出文件为 .exe 可执行文件
           go build -ldflags "-w -s" -o x-ui-release.exe -v main.go
