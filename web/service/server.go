@@ -967,3 +967,20 @@ func (s *ServerService) GetNewmlkem768() (any, error) {
 
 	return keyPair, nil
 }
+
+// SaveLinkHistory saves a new link and trims the history to the latest 10
+func (s *ServerService) SaveLinkHistory(historyType, link string) error {
+    record := &database.LinkHistory{
+        Type:      historyType,
+        Link:      link,
+        CreatedAt: time.Now(),
+    }
+    // 【核心修正】: 直接调用 AddLinkHistory 并返回其结果。
+    // 我们将把 Checkpoint 的逻辑移入 AddLinkHistory 内部，确保操作的原子性。
+    return database.AddLinkHistory(record)
+}
+
+// LoadLinkHistory loads the latest 10 links from the database
+func (s *ServerService) LoadLinkHistory() ([]*database.LinkHistory, error) {
+	return database.GetLinkHistory()
+}
