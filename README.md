@@ -21,7 +21,11 @@
   </a>
 </p>
 
-- 赞助地址（USDT/TRC20）：`TYQEmQp1P65u9bG7KPehgJdvuokfb72YkZ`
+- 赞助地址（USDT）：
+- TRC20 ---->>> `TYQEmQp1P65u9bG7KPehgJdvuokfb72YkZ`
+- Polygon ---->>> `0xd20eBE429c2398793178e015B2ca1Dc42601f3Eb`
+- Solana ---->>> `7qVEZuV98QTDN5qUmsFwvqTSvkYpmLtNf8o1sh1mppwR`
+- BSC/BEP20 ---->>> `0xd20eBE429c2398793178e015B2ca1Dc42601f3Eb`
 
 ## [【X-Panel面板】交流群：https://t.me/XUI_CN](https://t.me/XUI_CN)
 ## [【X-Panel面板】详细安装流程步骤：https://xeefei.blogspot.com/2025/09/x-panel.html](https://xeefei.blogspot.com/2025/09/x-panel.html)
@@ -136,10 +140,10 @@ apt update -y&&apt install -y curl&&apt install -y socat
 
 ## 安装指定版本
 
-若要安装指定的版本，请使用以下安装命令。 e.g., ver `v2.4.5`:
+若要安装指定的版本，请使用以下安装命令。 e.g., ver `v25.9.20`:
 
 ```
-VERSION=v2.4.5 && bash <(curl -Ls "https://raw.githubusercontent.com/xeefei/x-panel/$VERSION/install.sh") $VERSION
+VERSION=v25.9.20 && bash <(curl -Ls "https://raw.githubusercontent.com/xeefei/x-panel/$VERSION/install.sh") $VERSION
 ```
 ------------
 ## 若你的VPS默认有防火墙，请在安装完成之后放行指定端口
@@ -159,6 +163,12 @@ VERSION=v2.4.5 && bash <(curl -Ls "https://raw.githubusercontent.com/xeefei/x-pa
 ![54](./media/54.png)
 #### 3、直接复制【链接】，导入软件；放行【相应端口】，去【入站列表】点击【启用】。
 ![55](./media/55.png)
+#### 4、若你是用【TG端电报机器人】的【一键配置】生成功能，那直接点击就用，
+![56](./media/56.png)
+#### 5、选择好自己想要【一键创建】的协议组合类型，点击之后稍作等待，
+![57](./media/57.png)
+#### 6、TG端【一键配置】创建成功之后，二维码和链接地址机器人会发送给你，如下：
+![58](./media/58.png)
 
 ------------
 ## 安装证书开启https方式实现域名登录访问管理面板/----->>偷自己

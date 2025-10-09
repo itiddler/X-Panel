@@ -1,3 +1,4 @@
+
 {{ template "page/head_start" .}}
 <style>
   .ant-table:not(.ant-table-expanded-row .ant-table) {
@@ -728,10 +729,26 @@
                     </a-form-item>
 
                     <p><b>{{ i18n "pages.inbounds.oneClick.descriptionTitle" }}</b></p>
-                    <p>{{ i18n "pages.inbounds.oneClick.descriptionContent" }}</p>
+				    <p style="white-space: pre-wrap;">{{ i18n "pages.inbounds.oneClick.descriptionContent" }}</p>
                 </div>
                 
-                <div v-else>
+                <div v-else style="padding: 24px;">
+                    <div 
+                      @click="copyLink(inboundLink)" 
+                      style="text-align: center; margin-bottom: 20px; cursor: pointer; padding: 10px; border-radius: 8px;"
+					  :title="`{{ i18n "pages.inbounds.oneClick.clickToCopyTitle" }}`"
+                    >
+                      <p style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">
+                        {{ i18n "pages.inbounds.oneClick.scanQrcodeTitle" }}
+                      </p>
+                      
+                      <canvas id="oneClickQrcodeCanvas"></canvas>
+                      
+                      <p style="margin-top: 8px; font-size: 12px; color: #888;">
+                        {{ i18n "pages.inbounds.oneClick.clickToCopyHint" }}
+                      </p>
+                    </div>
+
                     <p><b>{{ i18n "pages.inbounds.oneClick.linkCreated" }}</b></p>
                     <a-input-search
                         :value="inboundLink"
@@ -1171,6 +1188,55 @@
                 }
             },
 
+			// 【新增函数】: 专门用于调用后端 API 放行端口的方法
+async openPort(port) {
+    if (!port || port <= 0) {
+        this.$message.error('无效端口号，无法放行。');
+        return false;
+    }
+
+    const loadingMessage = this.$message.loading(`正在向后端发送放行端口 ${port} 的指令...`, 0);
+    let success = true;
+    
+    try {
+        // 〔中文注释〕: 调用后端API，它现在会立刻返回一个表示“指令已发送”的JSON。
+        const msg = await HttpUtil.postForm('/panel/api/server/openPort', { port: port });
+        
+        if (msg.success) {
+            // 〔中文注释〕: 将提示信息修改为更准确的“指令已发送”，因为任务正在后台运行。
+            this.$message.success(`端口 ${port} 放行指令已发送，后台执行中！`);
+        } else {
+            success = false;
+            // 〔中文注释〕: 如果API调用本身就失败了（例如后端服务挂了），则显示错误。
+            this.$message.error(`发送端口 ${port} 放行指令失败: ${msg.msg || '未知错误，请检查后端日志。'}`);
+        }
+    } catch (err) {
+        success = false;
+        console.error(`请求放行端口 ${port} 失败:`, err);
+        // 〔中文注释〕: 网络错误或返回了非JSON内容（例如502网关错误）会在这里捕获。
+        this.$message.error(`请求放行端口 ${port} 失败，请检查网络或后端服务状态。 ${err.message}`);
+    } finally {
+        loadingMessage(); // 无论成功或失败，都关闭加载提示
+    }
+    return success;
+},
+
+			// 〔中文注释〕: 新增一个专门用于生成“一键配置”二维码的方法
+            generateOneClickQrCode(link) {
+                // 〔中文注释〕: this.$nextTick 是一个 Vue 特有的功能，它会等待 DOM 更新完成后再执行内部的代码。
+                // 这是必需的，因为 <canvas> 元素只有在 inboundLink 被赋值后才会显示出来，我们需要确保它存在才能进行绘制。
+                this.$nextTick(() => {
+                    const canvasElement = document.getElementById('oneClickQrcodeCanvas');
+                    if (canvasElement) {
+                        new QRious({
+                            element: canvasElement, // 〔中文注释〕: 关联到我们刚刚在 HTML 中添加的 canvas 元素
+                            value: link,            // 〔中文注释〕: 二维码的内容就是生成的分享链接
+                            size: 200,              // 〔中文注释〕: 设置二维码的尺寸为 200x200 像素
+                            level: 'M'              // 〔中文注释〕: 设置较高的容错率
+                        });
+                    }
+                });
+            },
 			
     // 【修改后】: 按照固定长度 2,4,6,8,10,12,14,16 来生成 shortIds
     generateShortIds() {
@@ -1269,6 +1335,13 @@
                     // 随机生成 10000-55535 之间的端口
                     const port = Math.floor(Math.random() * (55535 - 10000 + 1)) + 10000;
 
+					// 【新增代码】: 自动调用 openPort 接口放行端口
+                    const portOpenSuccess = await this.openPort(port);
+                    if (!portOpenSuccess) {
+                       // 【不中断流程，给出警告提示】
+                       this.$message.warning(`**注意：** 自动放行端口 ${port} 失败，请务必手动到您的 **VPS 防火墙**（例如 ufw、security group）放行该端口，否则入站将无法连接。`);
+                    }
+        
 	                // 【中文注释】: 从预设列表中随机选择一个SNI
                     const randomDest = this.realityDestinations[Math.floor(Math.random() * this.realityDestinations.length)];
           
@@ -1343,6 +1416,9 @@
                     if (msg.success) {
                         const link = `vless://${uuid}@${window.location.hostname}:${port}?type=tcp&encryption=none&security=reality&pbk=${publicKey}&fp=chrome&sni=${randomSni}&sid=${linkSid}&spx=%2F&flow=xtls-rprx-vision#${remark}-${remark}`;
                         this.inboundLink = link;
+
+						// 〔中文注释〕: 在这里调用新增的二维码生成方法，把链接传进去
+                        this.generateOneClickQrCode(link);
                         
                         // 【新增】: 调用保存方法，将链接保存到历史记录
                         this.saveLinkToHistory('vless_reality', link);
@@ -1392,6 +1468,13 @@
                     // 随机生成2053, 2083, 2087, 2096, 8443这5个端口中的其中一个
                     const allowedPorts = [2053, 2083, 2087, 2096, 8443];
                     const port = allowedPorts[Math.floor(Math.random() * allowedPorts.length)];
+
+					// 【新增代码】: 自动调用 openPort 接口放行端口
+                    const portOpenSuccess = await this.openPort(port);
+                    if (!portOpenSuccess) {
+                    // 【不中断流程，给出警告提示】
+                        this.$message.warning(`**注意：** 自动放行端口 ${port} 失败，请务必手动到您的 **VPS 防火墙**（例如 ufw、security group）放行该端口，否则入站将无法连接。`);
+                    }
                     
 					// 随机生成一个8位大小写字母的路径
 					const path = "/" + Array.from({ length: 8 }, () =>
@@ -1479,6 +1562,9 @@
                         const link = `vless://${uuid}@${window.location.hostname}:${port}?type=tcp&encryption=${encryption}&security=tls&fp=chrome&alpn=http%2F1.1&sni=${serverName}&flow=xtls-rprx-vision#${remark}-${remark}`;
                         this.inboundLink = link;
 
+						// 〔中文注释〕: 在这里调用新增的二维码生成方法，把链接传进去
+                        this.generateOneClickQrCode(link);
+
                         // 【新增】: 调用保存方法，将链接保存到历史记录
                         this.saveLinkToHistory('vless_tls_encryption', link);
                         
@@ -1493,22 +1579,66 @@
                 }
             },
 
+            // 【中文注释】: 这是修复后的 copyLink 方法
             async copyLink(linkToCopy) {
                 const link = linkToCopy || this.inboundLink;
                 if (!link) {
                     this.$message.warning('没有可复制的链接。');
                     return;
                 }
+
+                // 【中文注释】: 优先使用 Clipboard API，但它需要安全上下文 (HTTPS)
+                if (navigator.clipboard && window.isSecureContext) {
+                    try {
+                        await navigator.clipboard.writeText(link);
+                        this.$message.success('链接已成功复制到剪贴板！');
+                        return;
+                    } catch (err) {
+                        console.error('Clipboard API 复制失败，将尝试回退方法:', err);
+                        // 如果失败，则继续执行下面的回退方法
+                    }
+                }
+
+                // 【中文注释】: 回退方案，使用 document.execCommand，兼容性更好
+                const textArea = document.createElement("textarea");
+                textArea.value = link;
+                // 将输入框移动到屏幕外，防止干扰
+                textArea.style.position = "absolute";
+                textArea.style.left = "-9999px";
+                textArea.setAttribute("readonly", "");
+
+                document.body.appendChild(textArea);
+                
+                // 选择输入框中的内容
+                textArea.select();
+                
                 try {
-                    await navigator.clipboard.writeText(link);
+                    // 执行复制命令
+                    document.execCommand('copy');
                     this.$message.success('链接已成功复制到剪贴板！');
                 } catch (err) {
+                    console.error('execCommand 复制失败:', err);
                     this.$message.error('复制失败，请手动复制。');
+                } finally {
+                    // 无论成功与否，最后都移除这个临时输入框
+                    document.body.removeChild(textArea);
                 }
             },
 
-            // 【中文注释】: 处理“订阅转换”按钮的点击事件 (已更新逻辑)
+
+            // 〔中文注释〕: 处理“订阅转换”按钮的点击事件 (已更新为完整逻辑)
             handleSubscriptionConversion() {
+                // 【第一步】: 检查当前协议是否为 HTTPS
+                if (window.location.protocol !== "https:") {
+                    this.$warning({
+                        title: '必须使用 HTTPS 访问',
+                        content: '【订阅转换】功能需要一个安全的 HTTPS 环境才能运行。请先为您的面板域名正确配置 SSL 证书，然后再使用此功能。',
+                        class: themeSwitcher.currentTheme,
+                    });
+                    return; // 如果是 http，则终止后续所有操作
+                }
+
+                // 【第二步】：弹出确认框，询问用户是否继续
                 this.$confirm({
                     title: '{{ i18n "pages.inbounds.subConversion.modalTitle"}}',
                     content: '{{ i18n "pages.inbounds.subConversion.modalContent"}}',
@@ -1517,29 +1647,150 @@
                     class: themeSwitcher.currentTheme,
                     onOk: () => {
                         const subConverterUrl = `https://${window.location.hostname}:15268`;
-                        const loadingMessage = this.$message.loading('正在检测订阅转换服务...', 0);
+                        const loadingMessage = this.$message.loading('正在检测订阅转换服务 (运行端口15268)...', 0);
 
                         const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 3000);
+                        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时检测
 
+                        // 【第三步】: 尝试通过 fetch API 访问订阅转换服务端口
                         fetch(subConverterUrl, {
                             method: 'GET',
-                            mode: 'no-cors',
+                            mode: 'no-cors', // 〔中文注释〕: 使用 no-cors 模式进行简单的网络连通性检查
                             signal: controller.signal
                         })
                         .then(response => {
+                            // 【情况 A】: 访问成功，服务正在运行
                             clearTimeout(timeoutId);
-                            loadingMessage();
-                            this.$message.success('服务检测成功，正在跳转...', 2);
-                            window.open(subConverterUrl, '_blank');
+                            loadingMessage(); // 关闭加载提示
+                            this.$message.success('服务检测成功，正在为您跳转...', 2);
+                            window.open(subConverterUrl, '_blank'); // 在新标签页中打开
                         })
                         .catch(err => {
+                            // 【情况 B】: 访问失败 (例如超时或连接被拒绝)
                             clearTimeout(timeoutId);
-                            loadingMessage();
-                            this.$info({
+                            loadingMessage(); // 关闭加载提示
+                            
+                            // 〔中文注释〕: 弹出新的确认框，提供“一键安装”选项
+                            this.$confirm({
                                 title: '{{ i18n "pages.inbounds.subConversion.notFoundTitle"}}',
-                                content: '{{ i18n "pages.inbounds.subConversion.notFoundContent"}}',
+                                content: `无法连接到订阅转换服务。这可能意味着它尚未安装或未在运行。您想现在远程执行安装指令吗？
+
+                                         【重要提示】: 执行前，请确保您服务器的防火墙已放行 8000 和 15268 这两个端口。`,
+                                okText: '立即安装',
+                                cancelText: '稍后再说',
                                 class: themeSwitcher.currentTheme,
+                                onOk: async () => {
+                                    // 〔中文注释〕：从这里开始是全新的轮询检测逻辑
+									// 确保 loginUrl 被定义，用于成功提示
+                                    const subConverterUrl = `https://${window.location.hostname}:15268`;
+                                    const loginUrl = subConverterUrl; 
+									
+									const portsToOpen = [8000, 15268];
+                                    let openPortFailed = false; // 用于标记是否有端口放行失败
+                        
+                                    // 【新增逻辑】：先尝试放行 8000 和 15268 端口 (不中断流程)
+                                    const openPortLoading = this.$message.loading(`正在尝试自动放行端口 ${portsToOpen.join(' 和 ')}...`, 0);
+
+                                    // 使用 Promise.allSettled 确保所有端口放行尝试完成后才继续
+                                    const openPortResults = await Promise.allSettled(
+                                        portsToOpen.map(port => this.openPort(port))
+                                    );
+                        
+                                    openPortLoading(); // 关闭放行加载提示
+                        
+                                    openPortResults.forEach(result => {
+                                    // 检查每个放行操作是否失败 (openPort 返回 false)
+                                    if (result.status === 'fulfilled' && result.value === false) {
+                                        openPortFailed = true;
+                                    }
+                                    // Promise.allSettled 的 rejected 状态表明 openPort 内部抛出异常 (如网络错误)，也视为放行失败
+                                    if (result.status === 'rejected') {
+                                        openPortFailed = true;
+                                     }
+                                });
+
+                                    if (openPortFailed) {
+                                   // 使用非模态、自动关闭的 this.$message.warning
+                                    this.$message.warning({
+                                        content: `端口自动放行失败。**安装流程将继续**，但请您务必进入 VPS 手动放行 8000 和 15268 端口。`,
+                                        duration: 10, // 持续 10 秒后自动关闭
+                                        key: 'portOpenWarning', // 可选：指定一个key，防止重复弹出
+                                    });
+                                  }
+                                    // 1. 先向后端发送安装指令
+                                    const installLoading = this.$message.loading('正在向后端发送安装指令...', 0);
+                                    try {
+                                        const msg = await HttpUtil.post('/panel/api/server/install/subconverter');
+                                        installLoading(); // 指令发送成功后，关闭这个短暂的加载提示
+                                        if (!msg.success) {
+                                            this.$error({
+                                                title: '指令发送失败',
+                                                content: msg.msg || '发生未知错误，请检查后端日志。',
+                                                class: themeSwitcher.currentTheme,
+                                            });
+                                            return;
+                                        }
+                                    } catch (error) {
+                                        installLoading();
+                                        this.$error({
+                                            title: '前端请求失败',
+                                            content: '无法连接到后端API接口，请检查您的网络连接或后端服务是否正常运行。',
+                                            class: themeSwitcher.currentTheme,
+                                        });
+                                        return;
+                                    }
+
+                                    // 2. 指令发送成功后，创建并显示一个用于等待服务启动的模态框
+                                    const h = this.$createElement;
+                                    const modal = this.$info({
+                                    title: '⏳ 正在安装并启动服务...',
+                                    content: '安装指令已发送，后台正在执行安装和启动。请耐心等待，预计40秒内自动给出安装成功提示。',
+                                    class: themeSwitcher.currentTheme,
+                                    okText: '后台运行',
+                                    okButtonProps: {
+                                         props: {
+                                            loading: true // 让按钮一直处于加载状态
+                                         }
+                                       },
+                                     });
+
+                                    // 3. 核心妥协：使用固定延时代替不可靠的前端轮询
+                                    const SERVICE_STARTUP_WAIT_TIME = 40000; // 等待 40 秒钟
+
+                                    setTimeout(() => {
+                                    // 延时结束后，强制更新模态框为成功状态
+                                       modal.update({
+                                         title: '✅ 安装成功！',
+                                         // 使用 VNode 来创建指定的提示内容
+                                         content: h('div', { style: 'white-space: pre-wrap; text-align: left;' }, [
+                                         h('p', { style: 'font-weight: bold; font-size: 16px; margin-bottom: 10px;'}, '🎉 恭喜！【订阅转换】模块已成功安装！'),
+                                         h('p', '您现在可以使用以下地址访问 Web 界面：'),
+                                         h('p', [
+                                         h('strong', '🔗 登录地址: '),
+                                         h('a', {
+                                           attrs: {
+                                              href: loginUrl,
+                                              target: '_blank'
+                                            },
+                                         style: 'font-family: monospace; font-weight: bold;'
+                                         }, loginUrl)
+                                        ]),
+                                        // 突出显示用户名和密码
+                                        h('p', [ '默认用户名: ', h('strong', 'admin') ]),
+                                        h('p', [ '默认 密码: ', h('strong', '123456') ]),
+                                        h('p', { style: 'font-size: 12px; color: #888; margin-top: 10px;'}, '可登录订阅转换后台修改您的密码！'),
+                                        h('p', { style: 'margin-top: 10px; font-style: italic; color: #ff4d4f;' }, '---------------------------------------'), // 使用红色分隔线
+                                        h('p', { style: 'font-style: italic; color: #ff4d4f;' }, '【重要提示】：若您无法访问上述地址，请进入 VPS 中手动放行 8000 和 15268 端口。') // 红色字体
+                                        ]),
+                                       okText: '完成',
+                                       okButtonProps: {
+                                            props: {
+                                               loading: false
+                                            }
+                                          },
+                                       });
+                                    }, SERVICE_STARTUP_WAIT_TIME);
+                                 },
                             });
                         });
                     },
