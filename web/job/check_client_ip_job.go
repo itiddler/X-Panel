@@ -47,6 +47,13 @@ type CheckDeviceLimitJob struct {
 	lastPosition int64
                  // 〔中文注释〕: 注入 Telegram 服务用于发送通知，确保此行存在。
 	telegramService   service.TelegramService
+
+	// violationStartTime: 记录用户“开始设备超限”的时间。
+	// 用于实现“观察期”：刚发现超限时不封，等 3 分钟后如果还超限才封。
+	violationStartTime map[string]time.Time
+
+	// triggerLock: 保护上述 Map 的读写安全
+	triggerLock sync.Mutex
 }
 
 // RandomUUID 中文注释: 新增一个辅助函数，用于生成一个随机的 UUID
@@ -67,6 +74,9 @@ func NewCheckDeviceLimitJob(xrayService *service.XrayService, telegramService se
 		xrayApi: xray.XrayAPI{},
                                  // 〔中文注释〕: 将传入的 telegramService 赋值给结构体实例。
 		telegramService: telegramService,
+
+		// 初始化防抖 Map
+		violationStartTime: make(map[string]time.Time),
 	}
 }
 
@@ -217,20 +227,57 @@ func (j *CheckDeviceLimitJob) checkAllClientsLimit() {
 			continue
 		}
 
-
 		isBanned := ClientStatus[email]
 		activeIPCount := len(ips)
 
-                                  // 调用封禁函数
+		// =====================================================================
+		// 设备限制的“观察期”逻辑 (完美解决切换网络误封问题)
+		// =====================================================================
+
+		// 场景 A：用户设备数超限，且当前未被封禁
 		if activeIPCount > info.Limit && !isBanned {
-			// 中文注释: 调用封禁函数时，传入当前的IP数用于记录日志
+			j.triggerLock.Lock()
+			startTime, exists := j.violationStartTime[email]
+
+			if !exists {
+				// 如果是第一次发现超限，不要急着封！记录当前时间，开始“观察”
+				j.violationStartTime[email] = time.Now()
+				logger.Infof("〔观察期〕检测到用户 %s 设备超限 (%d > %d)，进入3分钟观察期，暂不封禁...", email, activeIPCount, info.Limit)
+				j.triggerLock.Unlock()
+				continue // 跳过本次循环，给用户一点时间（例如切换网络造成的双IP）
+			}
+
+			// 如果已经处于观察期，计算已持续了多久
+			// 【核心设置】：这里设置为 3 分钟 (180秒)。
+			if time.Since(startTime) < 3*time.Minute {
+				j.triggerLock.Unlock()
+				// 还在观察期内，暂不封禁
+				continue
+			}
+
+			// 观察期结束，超限状态依然存在 -> 确认封禁！
+			// 封禁前先清除观察记录，以便下次使用
+			delete(j.violationStartTime, email)
+			j.triggerLock.Unlock()
+
+			// 执行原有的封禁逻辑
 			j.banUser(email, activeIPCount, &info)
 		}
 
-                                  // 调用解封函数
-		if activeIPCount <= info.Limit && isBanned {
-			// 中文注释: 调用解封函数时，传入当前的IP数用于记录日志
-			j.unbanUser(email, activeIPCount, &info)
+		// 场景 B：用户恢复正常 (IP数 <= 限制)，或者已被封禁但现在设备数合规
+		if activeIPCount <= info.Limit {
+			// 如果该用户之前在“观察名单”里，现在正常了，直接移除名单，皆大欢喜
+			j.triggerLock.Lock()
+			if _, exists := j.violationStartTime[email]; exists {
+				delete(j.violationStartTime, email)
+				logger.Infof("〔观察期〕用户 %s 设备数量已恢复正常，观察期取消。", email)
+			}
+			j.triggerLock.Unlock()
+
+			// 如果用户处于被封禁状态，执行解封
+			if isBanned {
+				j.unbanUser(email, activeIPCount, &info)
+			}
 		}
 	}
 

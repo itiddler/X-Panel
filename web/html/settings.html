@@ -109,7 +109,7 @@
                 </a-card>
               </a-col>
               <a-col>
-                <a-tabs default-active-key="1">
+                <a-tabs v-model="activeTab">
                   <a-tab-pane key="1" :style="{ paddingTop: '20px' }">
                     <template #tab>
                       <a-icon type="setting"></a-icon>
@@ -169,6 +169,9 @@
     el: '#app',
     data: {
       themeSwitcher,
+      // 【修改点 2：新增 activeTab 变量】
+      // 默认为 '1'，即面板设置
+      activeTab: '1', 
       loadingStates: {
         fetched: false,
         spinning: false
@@ -590,6 +593,13 @@
       }
     },
     async mounted() {
+      // 【修改点 3：页面加载时检查 URL 参数】
+      // 如果 URL 包含 ?tab=telegram，则自动跳转到 Telegram 配置 (Key='3')
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'telegram') {
+          this.activeTab = '3';
+      }
+
       await this.getAllSetting();
 
       while (true) {
