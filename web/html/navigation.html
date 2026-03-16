@@ -108,7 +108,7 @@
   <a-layout id="content-layout">
     <a-layout-content>
       <a-spin :spinning="false">
-        <a-tabs default-active-key="1">
+        <a-tabs v-model="activeKey">
           <a-tab-pane key="1">
             <template #tab>
               <a-icon type="tool"></a-icon>
@@ -261,7 +261,7 @@
                   <li><strong>优化 -【付费Pro版】的“授权码验证机制”：</strong> 增加【后台联网验证】，以及“机器指纹”等属性；</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】TG端“多面板管理”：</strong> 一个机器人可同时管理其他面板，可以很丝滑地远程操作【被控端 VPS】；</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】TG端“获取节点链接”功能：</strong> 支持【本机】和【远程被控端 VPS】都能获取，开发此功能的目的在于：不用进〔面板后台〕，就能在 TG端 获取到之前已经创建过的“链接”；</li>
-                  <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“一键部署中转节点”：</strong> 解决了不懂配置的麻烦，已实现：远程Socks创建 --> 本机路由配置 --> 本机入口创建 --> 生成“二维码和链接”，“小手一点”，直接可用；</li>
+                  <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“一键部署中转节点”：</strong> 解决了不懂配置的麻烦，已实现：远程Socks5创建 --> 本机路由配置 --> 本机入口创建 --> 生成“二维码和链接”，“小手一点”，直接可用；</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【申请安装证书】“第18选项”：</strong> 有“备用方式申请证书”，当用常规方式【1】申请不下来时，可以试试“备用方式5”；</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【申请安装证书】“第18选项”：</strong> 有“可自定义证书路径”，自己进入 VPS 中“手动上传证书”，复制路径，在脚本中填入即可；</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“深度调优脚本”：</strong> 包含 BBR+FQ, TCP Fast Open, 内存缓冲区及队列优化，在〔Pro版〕脚本中“第29选项”可直接用；</li>
@@ -271,6 +271,8 @@
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“TG端 积分多重功能”；推出：</strong> 积分查询，积分换购，授权码查询，修改用户名，积分转移/打赏，以及“积分排行榜”，</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“TG端签到得积分”功能，推出【“积分换购”的可用功能】：</strong> A、消耗1000积分“自助重置换绑时间”，B、消耗5000积分“自助换购一个普通授权码”，</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“远程备份 + 急救还原”功能：</strong> 面板报错“崩了”，不用像之前那样：卸载面板 -->> 重装面板，更不用很麻烦去“重装系统”解决，直接：远程急救还原，前提就是：你自己要知道，在面板“正常运行”的时候，去「备份数据快照」，</li>
+                  <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“每月重置流量”功能：</strong> 可输入1—31之间的任意数字，比如：输入12，即代表“每月12号”「重置入站流量」，以便提供更友好的“重置流量方式”，</li>
+                  <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】“批量部署节点”功能：</strong> 可直接在面板后台的“一键配置”中去使用，点击一次可批量部署生成10条「VLESS + TCP + Reality + Vision」协议组合的入站，</li>
                   <li><strong>新增 -〔X-Panel 面板〕----->>【付费Pro版】推出“购买机器人”功能：</strong> 可自助全自动在“机器人”中：购买授权码，增加配额，充值积分，自助重置换绑等，联系：<a href="https://t.me/Buy_ShouQuan_Bot" target="_blank">https://t.me/Buy_ShouQuan_Bot</a></li>
                 </ol>
                 <br>
@@ -406,7 +408,20 @@
     el: '#app',
     data: {
       themeSwitcher, // 确保主题切换器对象在 Vue 实例中可用
+
+            // 【新增】：用于控制当前选中的标签页，默认为 '1'
+            activeKey: '1',
     },
+
+    async mounted() {
+            // 【新增】：检查 URL 是否带有 ?tab=x 参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab) {
+                // 如果有参数，就自动切换到对应的标签页 (例如 '3')
+                this.activeKey = tab;
+            }
+        },
   });
 </script>
 {{ template "page/body_end" .}}
